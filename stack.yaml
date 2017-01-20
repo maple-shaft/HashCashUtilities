@@ -43,10 +43,10 @@ extra-deps:
 - strict-0.3.2
 - cryptonite-0.20
 - bytestring-conversion-0.3.1 
-- bytestring-0.10.6.0
-- memory-0.13
-- base64-bytestring-1.0.0.1
-- utf8-string-1.0.1.1
+#- bytestring-0.10.6.0
+#- memory-0.13
+#- base64-bytestring-1.0.0.1
+#- utf8-string-1.0.1.1
 - binary-strict-0.4.8.3
 - split-0.2.2
 
