@@ -74,21 +74,26 @@ formatTemplate base (x:xs) =
    
 get16RandomBytes :: (DRG g) => g -> (ByteString, g)
 get16RandomBytes = randomBytesGenerate 16
-  
-getBaseString :: ByteString -> Int32 -> String
-getBaseString bs counter = 
+
+getBaseTemplate :: ByteString -> String
+getBaseTemplate bs =
   let encodedVal = B64.encode bs
-      encodedCounter = encodeInt32 counter
-      baseParams = [(convertIntToString difficulty), exampleDate, address, (convertToString encodedVal), (convertToString encodedCounter)]
+      baseParams = [(convertIntToString difficulty), exampleDate, address, (convertToString encodedVal)]
   in formatTemplate template baseParams
+  
+getBaseString :: String -> Int32 -> String
+getBaseString s counter = 
+  let encodedCounter = encodeInt32 counter
+      baseParams = [(convertToString encodedCounter)]
+  in formatTemplate s baseParams
   
 hashSHA1Encoded :: ByteString -> ByteString
 hashSHA1Encoded bs = B.pack . BA.unpack $ hashDigest
   where hashDigest = hash bs :: Digest SHA1
 						   
-testCounterBool :: ByteString -> Int32 -> Bool
-testCounterBool rb counter =
-  let baseString = getBaseString rb counter
+testCounterBool :: String -> Int32 -> Bool
+testCounterBool s counter =
+  let baseString = getBaseString s counter
       hashedString = hashSHA1Encoded $ convertFromString baseString
       eitherFirst32 = runGet mahDecoder hashedString
   in case eitherFirst32 of
@@ -98,13 +103,24 @@ testCounterBool rb counter =
 -- Keep taking incrementing counters from an infinite list and testing them until we find a counter 
 -- that generates a valid header
 findValidCounter :: ByteString -> Int32
-findValidCounter ran = fromJust $ find (testCounterBool ran) [1..]
+findValidCounter ran = fromJust $ find (testCounterBool s) [1..]
+  where s = getBaseTemplate ran
 
 generateHeader :: IO String
 generateHeader = do
   g <- getSystemDRG
   let (ran, _) = get16RandomBytes g
   let validCounter = findValidCounter ran
-  let validHeader = getBaseString ran validCounter
+  let validBase = getBaseTemplate ran
+  let validHeader = getBaseString validBase validCounter
   return $ headerPrefix ++ validHeader
+  
+validateHeader :: String -> Bool
+validateHeader s = 
+  let hashedString = hashSHA1Encoded $ convertFromString $ s
+      eitherFirst32 = runGet mahDecoder hashedString
+  in case eitherFirst32 of
+    (Left first32, _) -> False
+    (Right first32, _) -> firstBitsZero first32
+  
       
