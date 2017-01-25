@@ -107,4 +107,13 @@ generateHeader = do
   let validCounter = findValidCounter ran
   let validHeader = getBaseString ran validCounter
   return $ headerPrefix ++ validHeader
+  
+validateHeader :: String -> Bool
+validateHeader s = 
+  let hashedString = hashSHA1Encoded $ convertFromString $ s
+      eitherFirst32 = runGet mahDecoder hashedString
+  in case eitherFirst32 of
+    (Left first32, _) -> False
+    (Right first32, _) -> firstBitsZero first32
+  
       

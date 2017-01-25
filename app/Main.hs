@@ -18,6 +18,9 @@ generate args = do
   
 validate :: [String] -> IO ()
 validate args = do
+  let (arg:others) = args
+  if (validateHeader arg) then putStrLn "Valid"
+    else putStrLn "Not Valid"  
   return ()
 
 main :: IO ()
