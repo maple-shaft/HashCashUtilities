@@ -12,7 +12,7 @@ dispatch = [
   
 generate :: [String] -> IO ()
 generate args = do
-  header <- generateHeader
+  header <- generateHeader defaultHashCashSpec
   putStrLn header
   return ()
   

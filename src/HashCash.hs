@@ -20,17 +20,17 @@ import           Data.Maybe (fromJust)
 import           Data.Word (Word32)
 import           System.Random
 
+data HashCashSpec = HashCashSpec { version :: Int
+                                 , difficulty :: Int
+                                 , value :: String
+                                 , timestamp :: String
+                                 } deriving (Show) 
+
+defaultHashCashSpec = HashCashSpec {version=1, difficulty=20, value="a@a", timestamp="150320112233"}
 startingCounter :: Int32
 startingCounter = 1
-difficulty :: Int
-difficulty = 20
 headerPrefix = "X-Hashcash: "
 template = "1:{:{:{::{:{"
-dateTemplate = "YYMMDDhhmmss"
-address = "a@a"
-
--- example date because I dont want to mess with date formatting just now
-exampleDate = "150320112233"
 
 convertToString :: ByteString -> String
 convertToString = BU.toString
@@ -55,14 +55,14 @@ decoder :: Get Word32
 decoder = getWord32be
 
 -- OLD firstBitsZero, unoptimized
-firstBitsZeroOLD :: (Bits a) => a -> Bool
-firstBitsZeroOLD val = foldr (\x acc -> ((not $ testBit val x) && acc)) True [0..(difficulty - 1)]
+--firstBitsZeroOLD :: (Bits a) => a -> Bool
+--firstBitsZeroOLD val = foldr (\x acc -> ((not $ testBit val x) && acc)) True [0..(difficulty - 1)]
 
-bitMaskZero :: (Bits a) => a
-bitMaskZero = foldr (\x acc -> setBit acc x) zeroBits [0..(difficulty - 1)]
+bitMaskZero :: (Bits a) => Int -> a
+bitMaskZero diff = foldr (\x acc -> setBit acc x) zeroBits [0..(diff - 1)]
 
-firstBitsZero :: (Bits a) => a -> Bool
-firstBitsZero val = (val .&. bitMaskZero) == zeroBits 
+firstBitsZero :: (Bits a) => a -> Int -> Bool
+firstBitsZero val diff = (val .&. (bitMaskZero diff)) == zeroBits 
 
 formatTemplate :: String -> [String] -> String
 formatTemplate base [] = base
@@ -75,10 +75,13 @@ formatTemplate base (x:xs) =
 get16RandomBytes :: (DRG g) => g -> (ByteString, g)
 get16RandomBytes = randomBytesGenerate 16
 
-getBaseTemplate :: ByteString -> String
-getBaseTemplate bs =
+getBaseTemplate :: ByteString -> HashCashSpec -> String
+getBaseTemplate bs spec =
   let encodedVal = B64.encode bs
-      baseParams = [(convertIntToString difficulty), exampleDate, address, (convertToString encodedVal)]
+      baseParams = [(convertIntToString $ difficulty spec),
+        (timestamp spec),
+        (value spec),
+        (convertToString encodedVal)]
   in formatTemplate template baseParams
   
 getBaseString :: String -> Int32 -> String
@@ -91,27 +94,27 @@ hashSHA1Encoded :: ByteString -> ByteString
 hashSHA1Encoded bs = B.pack . BA.unpack $ hashDigest
   where hashDigest = hash bs :: Digest SHA1
 						   
-testCounterBool :: String -> Int32 -> Bool
-testCounterBool s counter =
+testCounterBool :: HashCashSpec -> String -> Int32 -> Bool
+testCounterBool spec s counter =
   let baseString = getBaseString s counter
       hashedString = hashSHA1Encoded $ convertFromString baseString
       eitherFirst32 = runGet mahDecoder hashedString
   in case eitherFirst32 of
     (Left first32, _) -> False
-    (Right first32, _) -> firstBitsZero first32
+    (Right first32, _) -> firstBitsZero first32 (difficulty spec)
 
 -- Keep taking incrementing counters from an infinite list and testing them until we find a counter 
 -- that generates a valid header
-findValidCounter :: ByteString -> Int32
-findValidCounter ran = fromJust $ find (testCounterBool s) [1..]
-  where s = getBaseTemplate ran
+findValidCounter :: ByteString -> HashCashSpec -> Int32
+findValidCounter ran spec = fromJust $ find (testCounterBool spec s) [1..]
+  where s = getBaseTemplate ran spec
 
-generateHeader :: IO String
-generateHeader = do
+generateHeader :: HashCashSpec -> IO String
+generateHeader spec = do
   g <- getSystemDRG
   let (ran, _) = get16RandomBytes g
-  let validCounter = findValidCounter ran
-  let validBase = getBaseTemplate ran
+  let validCounter = findValidCounter ran spec
+  let validBase = getBaseTemplate ran spec
   let validHeader = getBaseString validBase validCounter
   return $ headerPrefix ++ validHeader
   
@@ -119,8 +122,10 @@ validateHeader :: String -> Bool
 validateHeader s = 
   let hashedString = hashSHA1Encoded $ convertFromString $ s
       eitherFirst32 = runGet mahDecoder hashedString
+      (vers:diff:others) = (splitOn ":" s) :: [String]
   in case eitherFirst32 of
     (Left first32, _) -> False
-    (Right first32, _) -> firstBitsZero first32
+    (Right first32, _) -> firstBitsZero first32 (read diff)
   
       
+ 
