@@ -93,7 +93,7 @@ getBaseString s counter =
 hashSHA1Encoded :: ByteString -> ByteString
 hashSHA1Encoded bs = B.pack . BA.unpack $ hashDigest
   where hashDigest = hash bs :: Digest SHA1
-						   
+
 testCounterBool :: HashCashSpec -> String -> Int32 -> Bool
 testCounterBool spec s counter =
   let baseString = getBaseString s counter
