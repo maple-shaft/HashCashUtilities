@@ -14,8 +14,15 @@ dispatch = [
   
 help :: [String] -> IO ()
 help args = do
-  putStrLn "HashCash Command Line Interface Tool:"
-  putStrLn "Copyright 2017 Dustin Briscoe"
+  putStrLn "HashCash Command Line Interface Tool: Copyright 2017 Dustin Briscoe"
+  putStrLn " "
+  putStrLn "This command line tool will allow you to mint a valid HashCash header, or validate it.  The following tool is to be "
+  putStrLn "used at your own risk.  It is intended to be a proof of concept in implementing a proof of work scheme in a "
+  putStrLn "purely functional language like Haskell."
+  putStrLn " "
+  putStrLn "Features not yet implemented:"
+  putStrLn " - Only version 1 of HashCash is implemented"
+  putStrLn " - Timestamp validation is not currently occurring"
   putStrLn " "
   putStrLn "  Commands: "
   putStrLn "    generate - Create a valid X-Hashcash mail header given various options"
@@ -41,10 +48,12 @@ generateOpts (x:xs) y (Just spec) =
   let specV = spec { value = x }
       specD = spec { timestamp = x }
       specP = spec { difficulty=(read x) }
+      specT = spec { threads=(read x) }
   in case y of
     (Just "-v") -> generateOpts xs Nothing (Just specV)
     (Just "-d") -> generateOpts xs Nothing (Just specD)
     (Just "-p") -> generateOpts xs Nothing (Just specP)
+    (Just "-t") -> generateOpts xs Nothing (Just specT)
     _ -> Nothing
   
 validate :: [String] -> IO ()
