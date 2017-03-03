@@ -2,6 +2,8 @@
 
 module HashCash where
 
+import           Control.Concurrent
+import           Control.Concurrent.MVar
 import           Control.Monad
 import           Crypto.Hash
 import           Crypto.Random
@@ -15,7 +17,7 @@ import qualified Data.ByteString.UTF8 as BU
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Conversion as BCON
 import           Data.Int (Int32)
-import           Data.List (find, intercalate)
+import           Data.List (find, intercalate, sort)
 import           Data.List.Split (splitOn)
 import           Data.Maybe (fromJust)
 import           Data.Word (Word32)
@@ -56,7 +58,7 @@ mahDecoder = do
   return first32Bits
   
 --multi decoder
-getWords :: Get [Int]
+getWords :: Get [Int32]
 getWords = do
   empty <- isEmpty
   if empty
@@ -64,7 +66,7 @@ getWords = do
     else do
       w <- getWord32be
       ws <- getWords
-      return $ (toInt w):ws
+      return $ (fromIntegral (toInt w)):ws
 
 
 -- OLD firstBitsZero, unoptimized
@@ -142,6 +144,38 @@ generateHeader spec = do
   let validBase = getBaseTemplate ran spec
   let validHeader = getBaseString validBase validCounter
   return $ headerPrefix ++ validHeader
+
+generateHeaderAsync :: HashCashSpec -> IO String
+generateHeaderAsync spec = do
+  g <- getSystemDRG
+  -- Get 16 random bytes for the random value
+  let (ran, g2) = getRandomBytes'' g 16
+  -- get 4 * threads additional bytes for random starting counters for each thread
+  let (rand, _) = getRandomBytes'' g2 ((threads spec) * 4)
+  let rints = case (runGet getWords rand) of
+             (Left arr, _) -> []
+             (Right arr, _) -> arr
+  x <- newEmptyMVar :: IO (MVar Int32)
+  --mapM_ (\y -> forkIO . (generateHeaderThread ran spec x y)) (sort rints)
+  --void . forkIO $ generateHeaderThread ran spec x ((sort rints) !! 1)
+  --let threadFunction = void . forkIO $ generateHeaderThread ran spec x
+  let funcs = map (\y -> (generateHeaderThread ran spec x (abs y))) (sort rints)
+  mapM_ (\y -> forkIO $ y) funcs
+  validCounter <- takeMVar x
+  let validBase = getBaseTemplate ran spec
+  let validHeader = getBaseString validBase validCounter
+  return $ headerPrefix ++ validHeader
+
+generateHeaderThread :: ByteString -> HashCashSpec -> MVar (Int32) -> Int32 -> IO ()
+generateHeaderThread ran spec validMVar start = do
+  putStrLn $ "Starting a thread at " ++ (show start)
+  let s = getBaseTemplate ran spec
+  let validCounter = find (testCounterBool spec s) [start..]
+  if validCounter == Nothing 
+    then do
+      putStrLn "Thread did not find anything"
+        else do
+          putMVar validMVar (fromJust validCounter)
 
 validateHeader :: String -> Bool
 validateHeader s = 

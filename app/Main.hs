@@ -35,7 +35,7 @@ help args = do
 generate :: [String] -> IO ()
 generate args = do
   header <- case (generateOpts args Nothing (Just defaultHashCashSpec)) of
-    (Just s) -> generateHeader s
+    (Just s) -> generateHeaderAsync s
     Nothing -> do return "Please run the help command to see valid arguments."
   putStrLn header
   return ()
