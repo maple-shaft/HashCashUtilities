@@ -86,9 +86,6 @@ formatTemplate base (x:xs) =
        (splixHead:splixTail) = splix
        concatSplitTail = tail $ concatMap ('{' :) splixTail
    in formatTemplate (splixHead ++ (x ++ concatSplitTail)) xs
-   
-get16RandomBytes :: (DRG g) => g -> (ByteString, g)
-get16RandomBytes = randomBytesGenerate 16
 
 getRandomBytes'' :: (DRG g) => g -> Int -> (ByteString, g)
 getRandomBytes'' g num = randomBytesGenerate num g
@@ -121,30 +118,6 @@ testCounterBool spec s counter =
     (Left first32, _) -> False
     (Right first32, _) -> firstBitsZero first32 (difficulty spec)
 
--- Keep taking incrementing counters from an infinite list and testing them until we find a counter 
--- that generates a valid header
-findValidCounter :: ByteString -> HashCashSpec -> Int32
-findValidCounter ran spec = fromJust $ find (testCounterBool spec s) [1..]
-  where s = getBaseTemplate ran spec
-
-printMe = putStrLn . intercalate ("\n")
-  
-generateHeader :: HashCashSpec -> IO String
-generateHeader spec = do
-  g <- getSystemDRG
-  -- Get 16 random bytes for the random value
-  let (ran, g2) = getRandomBytes'' g 16
-  -- get 4 * threads additional bytes for random starting counters for each thread
-  let (rand, _) = getRandomBytes'' g2 ((threads spec) * 4)
-  let rints = case (runGet getWords rand) of
-             (Left arr, _) -> []
-             (Right arr, _) -> arr
-  printMe $ map (show) rints
-  let validCounter = findValidCounter ran spec
-  let validBase = getBaseTemplate ran spec
-  let validHeader = getBaseString validBase validCounter
-  return $ headerPrefix ++ validHeader
-
 generateHeaderAsync :: HashCashSpec -> IO String
 generateHeaderAsync spec = do
   g <- getSystemDRG
@@ -156,9 +129,6 @@ generateHeaderAsync spec = do
              (Left arr, _) -> []
              (Right arr, _) -> arr
   x <- newEmptyMVar :: IO (MVar Int32)
-  --mapM_ (\y -> forkIO . (generateHeaderThread ran spec x y)) (sort rints)
-  --void . forkIO $ generateHeaderThread ran spec x ((sort rints) !! 1)
-  --let threadFunction = void . forkIO $ generateHeaderThread ran spec x
   let funcs = map (\y -> (generateHeaderThread ran spec x (abs y))) (sort rints)
   mapM_ (\y -> forkIO $ y) funcs
   validCounter <- takeMVar x
@@ -170,6 +140,8 @@ generateHeaderThread :: ByteString -> HashCashSpec -> MVar (Int32) -> Int32 -> I
 generateHeaderThread ran spec validMVar start = do
   putStrLn $ "Starting a thread at " ++ (show start)
   let s = getBaseTemplate ran spec
+  -- This is where the bulk of work occurs.  It will start at the random number and continue
+  -- testing numbers for where the first p bits are zero.
   let validCounter = find (testCounterBool spec s) [start..]
   if validCounter == Nothing 
     then do

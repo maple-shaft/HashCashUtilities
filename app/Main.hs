@@ -29,6 +29,8 @@ help args = do
   putStrLn "      -v [option] = Use a specific email address or other value"
   putStrLn "      -d [option] = Use a specific valid timestamp such that timestamp of mail header can be validated"
   putStrLn "      -p [option] = Modify the difficulty setting of the proof of work (NOTE: Higher numbers require more work)"
+  putStrLn "      -t [option] = Number of parallel threads of computation.  On multicore systems this may result in faster "
+  putStrLn "                    generation of a header."
   putStrLn "    validate - Validate an X-Hashcash mail header and return 'Valid' or 'Not Valid'"
 
   
